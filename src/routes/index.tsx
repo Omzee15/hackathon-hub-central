@@ -38,6 +38,7 @@ const PLATFORMS: (Platform | "All")[] = [
 function Index() {
   const [items, setItems] = useState<Hackathon[]>([]);
   const [entries, setEntries] = useState<string[]>([]); // hackathon ids
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [q, setQ] = useState("");
   const [platform, setPlatform] = useState<(typeof PLATFORMS)[number]>("All");
   const [mode, setMode] = useState<"all" | "online" | "offline" | "hybrid">("all");
@@ -55,6 +56,8 @@ function Index() {
         setUser(nextUser);
       } catch (error) {
         console.error(error);
+      } finally {
+        if (active) setCatalogLoaded(true);
       }
     };
     void sync();
@@ -177,15 +180,18 @@ function Index() {
         </div>
 
         <div className="grid grid-cols-1 gap-5 pb-16 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((h) => (
-            <HackathonCard
-              key={h.id}
-              h={h}
-              tracked={entries.includes(h.id)}
-              onTrack={() => track(h)}
-            />
-          ))}
-          {filtered.length === 0 && (
+          {!catalogLoaded &&
+            Array.from({ length: 6 }).map((_, index) => <HackathonCardSkeleton key={index} />)}
+          {catalogLoaded &&
+            filtered.map((h) => (
+              <HackathonCard
+                key={h.id}
+                h={h}
+                tracked={entries.includes(h.id)}
+                onTrack={() => track(h)}
+              />
+            ))}
+          {catalogLoaded && filtered.length === 0 && (
             <div className="col-span-full rounded-xl border border-dashed border-border bg-card/50 p-10 text-center text-muted-foreground">
               No hackathons match your filters.
             </div>
@@ -193,5 +199,28 @@ function Index() {
         </div>
       </section>
     </AppShell>
+  );
+}
+
+function HackathonCardSkeleton() {
+  return (
+    <div className="min-h-[260px] rounded-xl border border-border bg-card p-5">
+      <div className="mb-5 flex items-center justify-between gap-2">
+        <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+        <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+      </div>
+      <div className="mb-3 h-7 w-3/4 animate-pulse rounded bg-muted" />
+      <div className="mb-2 h-4 w-full animate-pulse rounded bg-muted" />
+      <div className="mb-6 h-4 w-2/3 animate-pulse rounded bg-muted" />
+      <div className="space-y-3">
+        <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-3/5 animate-pulse rounded bg-muted" />
+      </div>
+      <div className="mt-7 flex gap-2">
+        <div className="h-9 flex-1 animate-pulse rounded-md bg-muted" />
+        <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
+      </div>
+    </div>
   );
 }
