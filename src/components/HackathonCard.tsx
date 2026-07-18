@@ -20,13 +20,17 @@ export function HackathonCard({
   onTrack?: () => void;
 }) {
   const eventDate = formatDate(h.date);
-  const registrationDeadline = h.registrationDeadline ? formatDate(h.registrationDeadline) : "Not listed";
+  const registrationDeadline = h.registrationDeadline
+    ? formatDate(h.registrationDeadline)
+    : "Not listed";
 
   return (
     <article className="group flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-[0_1px_0_rgba(0,0,0,0.04),0_10px_30px_-15px_rgba(80,60,30,0.15)]">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className={`h-2 w-2 rounded-full ${platformDot[h.platform] ?? "bg-muted-foreground"}`} />
+          <span
+            className={`h-2 w-2 rounded-full ${platformDot[h.platform] ?? "bg-muted-foreground"}`}
+          />
           {h.platform}
           {h.userAdded && (
             <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide">
@@ -51,8 +55,12 @@ export function HackathonCard({
         <Row icon={<Clock className="h-3.5 w-3.5" />} label="Last registration date">
           {registrationDeadline}
         </Row>
-        <Row icon={<Trophy className="h-3.5 w-3.5" />} label="Prize">{h.prize}</Row>
-        <Row icon={<MapPin className="h-3.5 w-3.5" />} label="Venue">{h.venue}</Row>
+        <Row icon={<Trophy className="h-3.5 w-3.5" />} label="Prize">
+          {h.prize}
+        </Row>
+        <Row icon={<MapPin className="h-3.5 w-3.5" />} label="Venue">
+          {h.venue}
+        </Row>
       </dl>
 
       <div className="mt-auto flex items-center gap-2 pt-2">

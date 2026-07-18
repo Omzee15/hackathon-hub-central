@@ -1,18 +1,13 @@
 export type Mode = "online" | "offline" | "hybrid";
 export type Platform =
-  | "HackCulture"
-  | "Devfolio"
-  | "Unstop"
-  | "LinkedIn"
-  | "HackerRank"
-  | "Community";
+  "HackCulture" | "Devfolio" | "Unstop" | "LinkedIn" | "HackerRank" | "Community";
 
 export interface Hackathon {
   id: string;
   name: string;
   platform: Platform;
   date: string; // ISO
-  registrationDeadline?: string; // ISO
+  registrationDeadline?: string | null; // ISO
   prize: string;
   venue: string;
   mode: Mode;

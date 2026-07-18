@@ -22,11 +22,12 @@ function Add() {
     description: "",
   });
   const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !form.name ||
@@ -39,10 +40,7 @@ function Add() {
       setErr("Please fill in all required fields.");
       return;
     }
-    if (
-      new Date(`${form.registrationDeadline}T00:00:00`) >
-      new Date(`${form.date}T00:00:00`)
-    ) {
+    if (new Date(`${form.registrationDeadline}T00:00:00`) > new Date(`${form.date}T00:00:00`)) {
       setErr("Last registration date cannot be after the hackathon date.");
       return;
     }
@@ -52,13 +50,20 @@ function Add() {
       setErr("Announcement link must be a valid URL.");
       return;
     }
-    store.addCustom({
-      id: crypto.randomUUID(),
-      platform: "Community",
-      userAdded: true,
-      ...form,
-    });
-    router.navigate({ to: "/" });
+    try {
+      setSaving(true);
+      await store.addCustom({
+        id: crypto.randomUUID(),
+        platform: "Community",
+        userAdded: true,
+        ...form,
+      });
+      router.navigate({ to: "/" });
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Could not submit hackathon.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -145,9 +150,10 @@ function Add() {
           <div className="flex gap-3">
             <button
               type="submit"
+              disabled={saving}
               className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Submit hackathon
+              {saving ? "Submitting..." : "Submit hackathon"}
             </button>
             <button
               type="button"
@@ -164,7 +170,15 @@ function Add() {
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-medium">

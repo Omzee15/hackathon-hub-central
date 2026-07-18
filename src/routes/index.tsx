@@ -44,14 +44,26 @@ function Index() {
   const [user, setUser] = useState<string | null>(null);
 
   useEffect(() => {
-    const sync = () => {
-      setItems(store.getAll().map((h) => (store.getCustom().some((c) => c.id === h.id) ? { ...h, userAdded: true } : h)));
-      setEntries(store.getEntries().map((e) => e.hackathonId));
-      setUser(store.getUser());
+    let active = true;
+    const sync = async () => {
+      try {
+        const [nextItems, nextUser] = await Promise.all([store.getAll(), store.getUser()]);
+        const nextEntries = nextUser ? await store.getEntries() : [];
+        if (!active) return;
+        setItems(nextItems);
+        setEntries(nextEntries.map((e) => e.hackathonId));
+        setUser(nextUser);
+      } catch (error) {
+        console.error(error);
+      }
     };
-    sync();
+    void sync();
+    void store.syncHackathons().then(sync).catch(console.warn);
     window.addEventListener("hh:update", sync);
-    return () => window.removeEventListener("hh:update", sync);
+    return () => {
+      active = false;
+      window.removeEventListener("hh:update", sync);
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -63,7 +75,7 @@ function Index() {
     });
   }, [items, platform, mode, q]);
 
-  const track = (h: Hackathon) => {
+  const track = async (h: Hackathon) => {
     if (!user) {
       window.location.href = "/login";
       return;
@@ -71,7 +83,7 @@ function Index() {
     if (entries.includes(h.id)) return;
     const idea = window.prompt(`What idea are you submitting to "${h.name}"?`, "");
     if (idea === null) return;
-    store.addEntry({
+    await store.addEntry({
       id: crypto.randomUUID(),
       hackathonId: h.id,
       idea: idea.trim(),
@@ -91,12 +103,13 @@ function Index() {
               Aggregating Devfolio · Unstop · HackCulture · LinkedIn · HackerRank
             </div>
             <h1 className="mb-4 font-display text-5xl leading-[1.05] tracking-tight md:text-6xl">
-              Every hackathon,<br />
+              Every hackathon,
+              <br />
               <span className="italic text-clay">one honest place.</span>
             </h1>
             <p className="mb-8 max-w-xl text-lg text-muted-foreground">
-              Browse curated hackathons from major platforms, submit ones we've missed,
-              and keep every idea you pitched in a single dashboard.
+              Browse curated hackathons from major platforms, submit ones we've missed, and keep
+              every idea you pitched in a single dashboard.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link

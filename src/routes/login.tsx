@@ -11,17 +11,25 @@ export const Route = createFileRoute("/login")({
 function Login() {
   const [phone, setPhone] = useState("");
   const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleaned = phone.replace(/\s+/g, "");
     if (!/^\+?\d{7,15}$/.test(cleaned)) {
       setErr("Enter a valid phone number (7–15 digits, optional + prefix).");
       return;
     }
-    store.setUser(cleaned);
-    router.navigate({ to: "/my" });
+    try {
+      setSaving(true);
+      await store.setUser(cleaned);
+      router.navigate({ to: "/my" });
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Could not sign in.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -48,12 +56,13 @@ function Login() {
           {err && <p className="text-sm text-destructive">{err}</p>}
           <button
             type="submit"
+            disabled={saving}
             className="w-full rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Continue
+            {saving ? "Signing in..." : "Continue"}
           </button>
           <p className="text-center text-xs text-muted-foreground">
-            No OTP for now — your phone number is stored locally in this browser.
+            No OTP for now — your phone number is saved to the database for tracking.
           </p>
         </form>
       </div>

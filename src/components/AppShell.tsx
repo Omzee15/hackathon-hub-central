@@ -7,13 +7,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const sync = () => setPhone(store.getUser());
-    sync();
+    let active = true;
+    const sync = async () => {
+      try {
+        const nextPhone = await store.getUser();
+        if (active) setPhone(nextPhone);
+      } catch {
+        if (active) setPhone(null);
+      }
+    };
+    void sync();
     window.addEventListener("hh:update", sync);
-    window.addEventListener("storage", sync);
     return () => {
+      active = false;
       window.removeEventListener("hh:update", sync);
-      window.removeEventListener("storage", sync);
     };
   }, []);
 
@@ -39,8 +46,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {phone}
                 </div>
                 <button
-                  onClick={() => {
-                    store.logout();
+                  onClick={async () => {
+                    await store.logout();
                     router.navigate({ to: "/" });
                   }}
                   className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -74,7 +81,9 @@ function NavLink({ to, children }: { to: string; children: ReactNode }) {
     <Link
       to={to}
       className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-      activeProps={{ className: "rounded-md px-3 py-2 text-sm bg-secondary text-foreground font-medium" }}
+      activeProps={{
+        className: "rounded-md px-3 py-2 text-sm bg-secondary text-foreground font-medium",
+      }}
       activeOptions={{ exact: true }}
     >
       {children}

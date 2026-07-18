@@ -20,46 +20,58 @@ const STATUS_LABEL: Record<Entry["status"], string> = {
 function My() {
   const router = useRouter();
   const [user, setUser] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [all, setAll] = useState<Hackathon[]>([]);
 
   useEffect(() => {
-    const sync = () => {
-      setUser(store.getUser());
-      setEntries(store.getEntries());
-      setAll(store.getAll());
+    let active = true;
+    const sync = async () => {
+      try {
+        const nextUser = await store.getUser();
+        const [nextEntries, nextAll] = nextUser
+          ? await Promise.all([store.getEntries(), store.getAll()])
+          : [[], await store.getAll()];
+        if (!active) return;
+        setUser(nextUser);
+        setEntries(nextEntries);
+        setAll(nextAll);
+        setReady(true);
+      } catch (error) {
+        console.error(error);
+        if (active) setReady(true);
+      }
     };
-    sync();
+    void sync();
     window.addEventListener("hh:update", sync);
-    return () => window.removeEventListener("hh:update", sync);
+    return () => {
+      active = false;
+      window.removeEventListener("hh:update", sync);
+    };
   }, []);
 
   useEffect(() => {
-    if (user === null && typeof window !== "undefined") {
-      // wait one tick to avoid SSR flicker; only redirect if truly logged out
-      const t = setTimeout(() => {
-        if (!store.getUser()) router.navigate({ to: "/login" });
-      }, 50);
-      return () => clearTimeout(t);
+    if (ready && user === null && typeof window !== "undefined") {
+      router.navigate({ to: "/login" });
     }
-  }, [user, router]);
+  }, [ready, user, router]);
 
   const map = new Map(all.map((h) => [h.id, h]));
 
-  const editIdea = (e: Entry) => {
+  const editIdea = async (e: Entry) => {
     const idea = window.prompt("Update your idea:", e.idea);
     if (idea === null) return;
-    store.updateEntry(e.id, { idea: idea.trim() });
+    await store.updateEntry(e.id, { idea: idea.trim() });
   };
 
-  const cycleStatus = (e: Entry) => {
+  const cycleStatus = async (e: Entry) => {
     const order: Entry["status"][] = ["registered", "submitted", "won", "dropped"];
     const next = order[(order.indexOf(e.status) + 1) % order.length];
-    store.updateEntry(e.id, { status: next });
+    await store.updateEntry(e.id, { status: next });
   };
 
-  const remove = (id: string) => {
-    if (confirm("Remove this hackathon from your list?")) store.removeEntry(id);
+  const remove = async (id: string) => {
+    if (confirm("Remove this hackathon from your list?")) await store.removeEntry(id);
   };
 
   return (
@@ -110,7 +122,11 @@ function My() {
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <CalendarDays className="h-3.5 w-3.5" />
-                        {d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                        {d.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <MapPin className="h-3.5 w-3.5" /> {h.venue} · {h.mode}
@@ -134,7 +150,11 @@ function My() {
                       </button>
                     </div>
                     <p className="whitespace-pre-wrap rounded-md bg-background/70 p-3 text-sm">
-                      {e.idea || <span className="text-muted-foreground italic">No idea yet — click edit.</span>}
+                      {e.idea || (
+                        <span className="text-muted-foreground italic">
+                          No idea yet — click edit.
+                        </span>
+                      )}
                     </p>
                   </div>
 
