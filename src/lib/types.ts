@@ -12,6 +12,7 @@ export interface Hackathon {
   name: string;
   platform: Platform;
   date: string; // ISO
+  registrationDeadline?: string; // ISO
   prize: string;
   venue: string;
   mode: Mode;

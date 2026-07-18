@@ -14,6 +14,7 @@ function Add() {
   const [form, setForm] = useState({
     name: "",
     date: "",
+    registrationDeadline: "",
     prize: "",
     venue: "",
     mode: "online" as Mode,
@@ -27,8 +28,22 @@ function Add() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.date || !form.prize || !form.venue || !form.link) {
+    if (
+      !form.name ||
+      !form.date ||
+      !form.registrationDeadline ||
+      !form.prize ||
+      !form.venue ||
+      !form.link
+    ) {
       setErr("Please fill in all required fields.");
+      return;
+    }
+    if (
+      new Date(`${form.registrationDeadline}T00:00:00`) >
+      new Date(`${form.date}T00:00:00`)
+    ) {
+      setErr("Last registration date cannot be after the hackathon date.");
       return;
     }
     try {
@@ -62,7 +77,7 @@ function Add() {
             />
           </Field>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <Field label="Date" required>
+            <Field label="Hackathon date" required>
               <input
                 type="date"
                 value={form.date}
@@ -70,6 +85,16 @@ function Add() {
                 className="input"
               />
             </Field>
+            <Field label="Last registration date" required>
+              <input
+                type="date"
+                value={form.registrationDeadline}
+                onChange={(e) => set("registrationDeadline", e.target.value)}
+                className="input"
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <Field label="Prize" required>
               <input
                 value={form.prize}
@@ -78,8 +103,6 @@ function Add() {
                 className="input"
               />
             </Field>
-          </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <Field label="Venue" required>
               <input
                 value={form.venue}
@@ -88,6 +111,8 @@ function Add() {
                 className="input"
               />
             </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <Field label="Mode" required>
               <select
                 value={form.mode}

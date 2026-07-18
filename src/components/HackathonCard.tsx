@@ -1,5 +1,5 @@
 import type { Hackathon } from "@/lib/types";
-import { CalendarDays, MapPin, Trophy, ExternalLink, Plus, Check } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Trophy, ExternalLink, Plus, Check } from "lucide-react";
 
 const platformDot: Record<string, string> = {
   Devfolio: "bg-clay",
@@ -19,7 +19,9 @@ export function HackathonCard({
   tracked?: boolean;
   onTrack?: () => void;
 }) {
-  const d = new Date(h.date);
+  const eventDate = formatDate(h.date);
+  const registrationDeadline = h.registrationDeadline ? formatDate(h.registrationDeadline) : "Not listed";
+
   return (
     <article className="group flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-[0_1px_0_rgba(0,0,0,0.04),0_10px_30px_-15px_rgba(80,60,30,0.15)]">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -43,11 +45,14 @@ export function HackathonCard({
       )}
 
       <dl className="mb-4 space-y-1.5 text-sm">
-        <Row icon={<CalendarDays className="h-3.5 w-3.5" />}>
-          {d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+        <Row icon={<CalendarDays className="h-3.5 w-3.5" />} label="Hackathon date">
+          {eventDate}
         </Row>
-        <Row icon={<Trophy className="h-3.5 w-3.5" />}>{h.prize}</Row>
-        <Row icon={<MapPin className="h-3.5 w-3.5" />}>{h.venue}</Row>
+        <Row icon={<Clock className="h-3.5 w-3.5" />} label="Last registration date">
+          {registrationDeadline}
+        </Row>
+        <Row icon={<Trophy className="h-3.5 w-3.5" />} label="Prize">{h.prize}</Row>
+        <Row icon={<MapPin className="h-3.5 w-3.5" />} label="Venue">{h.venue}</Row>
       </dl>
 
       <div className="mt-auto flex items-center gap-2 pt-2">
@@ -81,11 +86,32 @@ export function HackathonCard({
   );
 }
 
-function Row({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function Row({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-center gap-2 text-muted-foreground">
-      <span className="text-foreground/60">{icon}</span>
-      <span className="text-foreground">{children}</span>
+    <div className="flex items-start gap-2 text-muted-foreground">
+      <span className="mt-0.5 text-foreground/60">{icon}</span>
+      <span>
+        <span className="text-muted-foreground">{label}: </span>
+        <span className="text-foreground">{children}</span>
+      </span>
     </div>
   );
+}
+
+function formatDate(date: string) {
+  const parsed = date.includes("T") ? new Date(date) : new Date(`${date}T00:00:00`);
+
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
