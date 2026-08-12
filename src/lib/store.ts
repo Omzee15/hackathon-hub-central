@@ -1,4 +1,4 @@
-import type { Entry, Hackathon } from "./types";
+import type { Entry, Hackathon, TeamMember } from "./types";
 
 const dispatchUpdate = () => {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("hh:update"));
@@ -92,6 +92,34 @@ export const store = {
     await request<{ ok: boolean }>(`/api/entries/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
+    dispatchUpdate();
+  },
+
+  getTeamMembers: (entryId: string) =>
+    request<TeamMember[]>(`/api/entries/${encodeURIComponent(entryId)}/team`),
+
+  addTeamMemberByPhone: async (entryId: string, phone: string) => {
+    const result = await request<{ linked: boolean }>(
+      `/api/entries/${encodeURIComponent(entryId)}/team`,
+      { method: "POST", body: JSON.stringify({ phone }) },
+    );
+    dispatchUpdate();
+    return result;
+  },
+
+  addTeamGuest: async (entryId: string, name: string) => {
+    await request<{ linked: boolean }>(`/api/entries/${encodeURIComponent(entryId)}/team`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    dispatchUpdate();
+  },
+
+  removeTeamMember: async (entryId: string, memberId: string) => {
+    await request<{ ok: boolean }>(
+      `/api/entries/${encodeURIComponent(entryId)}/team/${encodeURIComponent(memberId)}`,
+      { method: "DELETE" },
+    );
     dispatchUpdate();
   },
 };

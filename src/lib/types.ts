@@ -23,3 +23,10 @@ export interface Entry {
   status: "registered" | "submitted" | "won" | "dropped";
   createdAt: string;
 }
+
+export interface TeamMember {
+  id: string; // phone for linked members, guest row id for unlinked
+  name: string;
+  phone?: string; // present only when linked to a registered user
+  linked: boolean;
+}

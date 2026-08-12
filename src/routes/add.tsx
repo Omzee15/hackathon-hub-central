@@ -29,18 +29,14 @@ function Add() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (
-      !form.name ||
-      !form.date ||
-      !form.registrationDeadline ||
-      !form.prize ||
-      !form.venue ||
-      !form.link
-    ) {
+    if (!form.name || !form.date || !form.prize || !form.venue || !form.link) {
       setErr("Please fill in all required fields.");
       return;
     }
-    if (new Date(`${form.registrationDeadline}T00:00:00`) > new Date(`${form.date}T00:00:00`)) {
+    if (
+      form.registrationDeadline &&
+      new Date(`${form.registrationDeadline}T00:00:00`) > new Date(`${form.date}T00:00:00`)
+    ) {
       setErr("Last registration date cannot be after the hackathon date.");
       return;
     }
@@ -90,7 +86,7 @@ function Add() {
                 className="input"
               />
             </Field>
-            <Field label="Last registration date" required>
+            <Field label="Last registration date">
               <input
                 type="date"
                 value={form.registrationDeadline}

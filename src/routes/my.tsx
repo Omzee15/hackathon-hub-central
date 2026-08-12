@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { TeamMembers } from "@/components/TeamMembers";
 import { store } from "@/lib/store";
 import type { Entry, Hackathon } from "@/lib/types";
 import { CalendarDays, MapPin, Trophy, ExternalLink, Pencil, Trash2, Plus } from "lucide-react";
@@ -282,13 +283,14 @@ function My() {
                         <Pencil className="h-3 w-3" /> edit
                       </button>
                     </div>
-                    <p className="whitespace-pre-wrap rounded-md bg-background/70 p-3 text-sm">
+                    <p className="mb-2 whitespace-pre-wrap rounded-md bg-background/70 p-3 text-sm">
                       {e.idea || (
                         <span className="text-muted-foreground italic">
                           No idea yet — click edit.
                         </span>
                       )}
                     </p>
+                    <TeamMembers entryId={e.id} />
                   </div>
 
                   <div className="flex flex-col items-start gap-2 md:items-end">

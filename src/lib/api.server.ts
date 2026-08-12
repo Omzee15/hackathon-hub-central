@@ -1,9 +1,14 @@
 import {
   addEntry,
+  addTeamGuest,
+  addTeamMemberByPhone,
   deleteHackathon,
+  isEntryMember,
   listEntries,
   listHackathons,
+  listTeamMembers,
   removeEntry,
+  removeTeamMember,
   updateEntry,
   updateHackathon,
   upsertHackathon,
@@ -97,6 +102,43 @@ export async function handleApiRequest(request: Request, env: unknown) {
       return json({ ok: true });
     }
 
+    const teamMatch = url.pathname.match(/^\/api\/entries\/([^/]+)\/team$/);
+    if (teamMatch && request.method === "GET") {
+      const phone = requirePhone(request);
+      const entryId = decodeURIComponent(teamMatch[1]);
+      await requireEntryMember(env, phone, entryId);
+      return json(await listTeamMembers(env, entryId));
+    }
+
+    if (teamMatch && request.method === "POST") {
+      const phone = requirePhone(request);
+      const entryId = decodeURIComponent(teamMatch[1]);
+      await requireEntryMember(env, phone, entryId);
+      const body = await readBody(request);
+      const memberPhone = optionalText(body.phone)?.replace(/\s+/g, "");
+
+      if (memberPhone) {
+        if (!/^\+?\d{7,15}$/.test(memberPhone)) {
+          throw new ApiError("Enter a valid phone number.");
+        }
+        const result = await addTeamMemberByPhone(env, entryId, memberPhone);
+        return json(result, 201);
+      }
+
+      const name = requireText(body.name, "name");
+      await addTeamGuest(env, entryId, name);
+      return json({ linked: false }, 201);
+    }
+
+    const teamMemberMatch = url.pathname.match(/^\/api\/entries\/([^/]+)\/team\/([^/]+)$/);
+    if (teamMemberMatch && request.method === "DELETE") {
+      const phone = requirePhone(request);
+      const entryId = decodeURIComponent(teamMemberMatch[1]);
+      await requireEntryMember(env, phone, entryId);
+      await removeTeamMember(env, entryId, decodeURIComponent(teamMemberMatch[2]));
+      return json({ ok: true });
+    }
+
     return json({ error: "Not found" }, 404);
   } catch (error) {
     if (error instanceof ApiError) return json({ error: error.message }, error.status);
@@ -123,12 +165,16 @@ async function readBody(request: Request) {
 }
 
 function parseHackathon(body: Record<string, unknown>): Hackathon {
+  const registrationDeadline = body.registrationDeadline
+    ? requireDate(body.registrationDeadline, "registrationDeadline")
+    : null;
+
   const hackathon = {
     id: String(body.id || crypto.randomUUID()),
     name: requireText(body.name, "name"),
     platform: "Community" as const,
     date: requireDate(body.date, "date"),
-    registrationDeadline: requireDate(body.registrationDeadline, "registrationDeadline"),
+    registrationDeadline,
     prize: requireText(body.prize, "prize"),
     venue: requireText(body.venue, "venue"),
     mode: parseMode(body.mode),
@@ -138,6 +184,7 @@ function parseHackathon(body: Record<string, unknown>): Hackathon {
   };
 
   if (
+    hackathon.registrationDeadline &&
     new Date(`${hackathon.registrationDeadline}T00:00:00`) > new Date(`${hackathon.date}T00:00:00`)
   ) {
     throw new ApiError("Last registration date cannot be after the hackathon date.");
@@ -229,6 +276,12 @@ function requirePhone(request: Request) {
   const phone = getPhone(request);
   if (!phone) throw new ApiError("Sign in required.", 401);
   return phone;
+}
+
+async function requireEntryMember(env: unknown, phone: string, entryId: string) {
+  if (!(await isEntryMember(env, phone, entryId))) {
+    throw new ApiError("Not found", 404);
+  }
 }
 
 function getPhone(request: Request) {

@@ -103,6 +103,31 @@ async function createSchemaAndSeed(env: unknown) {
   `;
 
   await sql`
+    CREATE TABLE IF NOT EXISTS entry_members (
+      entry_id TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+      phone TEXT NOT NULL REFERENCES users(phone) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (entry_id, phone)
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS entry_guests (
+      id TEXT PRIMARY KEY,
+      entry_id TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      phone_text TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+
+  await sql`
+    INSERT INTO entry_members (entry_id, phone)
+    SELECT id, phone FROM entries
+    ON CONFLICT DO NOTHING
+  `;
+
+  await sql`
     CREATE TABLE IF NOT EXISTS scrape_runs (
       source TEXT PRIMARY KEY,
       scraped_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -243,13 +268,21 @@ export async function upsertUser(env: unknown, phone: string) {
 export async function listEntries(env: unknown, phone: string): Promise<Entry[]> {
   await ensureDatabase(env);
   const rows = await getSql(env)<EntryRow[]>`
-    SELECT id, hackathon_id, idea, status, created_at
-    FROM entries
-    WHERE phone = ${phone}
-    ORDER BY created_at DESC
+    SELECT e.id, e.hackathon_id, e.idea, e.status, e.created_at
+    FROM entries e
+    JOIN entry_members m ON m.entry_id = e.id
+    WHERE m.phone = ${phone}
+    ORDER BY e.created_at DESC
   `;
 
   return rows.map(rowToEntry);
+}
+
+export async function isEntryMember(env: unknown, phone: string, entryId: string) {
+  const rows = await getSql(env)<{ entry_id: string }[]>`
+    SELECT entry_id FROM entry_members WHERE entry_id = ${entryId} AND phone = ${phone}
+  `;
+  return rows.length > 0;
 }
 
 export async function addEntry(env: unknown, phone: string, entry: Entry) {
@@ -270,6 +303,14 @@ export async function addEntry(env: unknown, phone: string, entry: Entry) {
       status = EXCLUDED.status,
       updated_at = now()
   `;
+  const rows = await getSql(env)<{ id: string }[]>`
+    SELECT id FROM entries WHERE phone = ${phone} AND hackathon_id = ${entry.hackathonId}
+  `;
+  const entryId = rows[0]?.id ?? entry.id;
+  await getSql(env)`
+    INSERT INTO entry_members (entry_id, phone) VALUES (${entryId}, ${phone})
+    ON CONFLICT DO NOTHING
+  `;
 }
 
 export async function updateEntry(
@@ -279,8 +320,12 @@ export async function updateEntry(
   patch: Partial<Pick<Entry, "idea" | "status">>,
 ) {
   await ensureDatabase(env);
-  const existing = await listEntries(env, phone);
-  const current = existing.find((entry) => entry.id === id);
+  if (!(await isEntryMember(env, phone, id))) return;
+
+  const rows = await getSql(env)<EntryRow[]>`
+    SELECT id, hackathon_id, idea, status, created_at FROM entries WHERE id = ${id}
+  `;
+  const current = rows[0];
   if (!current) return;
 
   await getSql(env)`
@@ -289,13 +334,106 @@ export async function updateEntry(
       idea = ${patch.idea ?? current.idea},
       status = ${patch.status ?? current.status},
       updated_at = now()
-    WHERE id = ${id} AND phone = ${phone}
+    WHERE id = ${id}
   `;
 }
 
 export async function removeEntry(env: unknown, phone: string, id: string) {
   await ensureDatabase(env);
-  await getSql(env)`DELETE FROM entries WHERE id = ${id} AND phone = ${phone}`;
+  if (!(await isEntryMember(env, phone, id))) return;
+  await getSql(env)`DELETE FROM entry_members WHERE entry_id = ${id} AND phone = ${phone}`;
+
+  const remaining = await getSql(env)<{ entry_id: string }[]>`
+    SELECT entry_id FROM entry_members WHERE entry_id = ${id}
+  `;
+  if (remaining.length === 0) {
+    await getSql(env)`DELETE FROM entries WHERE id = ${id}`;
+  }
+}
+
+type TeamMemberRow = { id: string; name: string; phone: string | null; linked: boolean };
+
+export async function listTeamMembers(env: unknown, entryId: string) {
+  await ensureDatabase(env);
+  const [members, guests] = await Promise.all([
+    getSql(env)<{ phone: string }[]>`
+      SELECT phone FROM entry_members WHERE entry_id = ${entryId} ORDER BY created_at ASC
+    `,
+    getSql(env)<{ id: string; name: string; phone_text: string | null }[]>`
+      SELECT id, name, phone_text FROM entry_guests WHERE entry_id = ${entryId} ORDER BY created_at ASC
+    `,
+  ]);
+
+  const linked: TeamMemberRow[] = members.map((m) => ({
+    id: m.phone,
+    name: m.phone,
+    phone: m.phone,
+    linked: true,
+  }));
+  const unlinked: TeamMemberRow[] = guests.map((g) => ({
+    id: g.id,
+    name: g.name,
+    phone: g.phone_text,
+    linked: false,
+  }));
+  return [...linked, ...unlinked];
+}
+
+export async function addTeamMemberByPhone(env: unknown, entryId: string, phone: string) {
+  await ensureDatabase(env);
+  const userRows = await getSql(env)<{ phone: string }[]>`
+    SELECT phone FROM users WHERE phone = ${phone}
+  `;
+  if (userRows.length === 0) return { linked: false as const };
+
+  const entryRows = await getSql(env)<{ hackathon_id: string }[]>`
+    SELECT hackathon_id FROM entries WHERE id = ${entryId}
+  `;
+  const hackathonId = entryRows[0]?.hackathon_id;
+  if (!hackathonId) throw new Error("Entry not found.");
+
+  const existingRows = await getSql(env)<{ id: string }[]>`
+    SELECT id FROM entries WHERE phone = ${phone} AND hackathon_id = ${hackathonId} AND id != ${entryId}
+  `;
+  const existingEntryId = existingRows[0]?.id;
+  if (existingEntryId) {
+    const otherMembers = await getSql(env)<{ phone: string }[]>`
+      SELECT phone FROM entry_members WHERE entry_id = ${existingEntryId}
+    `;
+    for (const { phone: memberPhone } of otherMembers) {
+      await getSql(env)`
+        INSERT INTO entry_members (entry_id, phone) VALUES (${entryId}, ${memberPhone})
+        ON CONFLICT DO NOTHING
+      `;
+    }
+    await getSql(env)`DELETE FROM entries WHERE id = ${existingEntryId}`;
+  }
+
+  await getSql(env)`
+    INSERT INTO entry_members (entry_id, phone) VALUES (${entryId}, ${phone})
+    ON CONFLICT DO NOTHING
+  `;
+  return { linked: true as const };
+}
+
+export async function addTeamGuest(
+  env: unknown,
+  entryId: string,
+  name: string,
+  phoneText?: string,
+) {
+  await ensureDatabase(env);
+  const id = crypto.randomUUID();
+  await getSql(env)`
+    INSERT INTO entry_guests (id, entry_id, name, phone_text) VALUES (${id}, ${entryId}, ${name}, ${phoneText ?? null})
+  `;
+  return id;
+}
+
+export async function removeTeamMember(env: unknown, entryId: string, memberId: string) {
+  await ensureDatabase(env);
+  await getSql(env)`DELETE FROM entry_members WHERE entry_id = ${entryId} AND phone = ${memberId}`;
+  await getSql(env)`DELETE FROM entry_guests WHERE entry_id = ${entryId} AND id = ${memberId}`;
 }
 
 export async function shouldScrape(env: unknown, source: string, maxAgeHours = 6) {
