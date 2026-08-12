@@ -55,6 +55,21 @@ export const store = {
     dispatchUpdate();
   },
 
+  updateHackathon: async (id: string, patch: Partial<Hackathon>) => {
+    await request<{ ok: boolean }>(`/api/hackathons/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    dispatchUpdate();
+  },
+
+  deleteHackathon: async (id: string) => {
+    await request<{ ok: boolean }>(`/api/hackathons/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    dispatchUpdate();
+  },
+
   getEntries: async () => request<Entry[]>("/api/entries"),
 
   addEntry: async (e: Entry) => {

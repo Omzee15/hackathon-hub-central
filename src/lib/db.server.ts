@@ -198,6 +198,39 @@ async function writeHackathon(
   `;
 }
 
+export async function updateHackathon(env: unknown, id: string, patch: Partial<Hackathon>) {
+  await ensureDatabase(env);
+  const rows = await getSql(env)<HackathonRow[]>`
+    SELECT id, name, platform, event_date, registration_deadline, prize, venue, mode, link, description, user_added
+    FROM hackathons WHERE id = ${id}
+  `;
+  const current = rows[0];
+  if (!current) throw new Error("Hackathon not found.");
+
+  await getSql(env)`
+    UPDATE hackathons SET
+      name = ${patch.name ?? current.name},
+      event_date = ${patch.date ?? current.event_date},
+      registration_deadline = ${
+        patch.registrationDeadline !== undefined
+          ? patch.registrationDeadline
+          : current.registration_deadline
+      },
+      prize = ${patch.prize ?? current.prize},
+      venue = ${patch.venue ?? current.venue},
+      mode = ${patch.mode ?? current.mode},
+      link = ${patch.link ?? current.link},
+      description = ${patch.description !== undefined ? patch.description : current.description},
+      updated_at = now()
+    WHERE id = ${id}
+  `;
+}
+
+export async function deleteHackathon(env: unknown, id: string) {
+  await ensureDatabase(env);
+  await getSql(env)`DELETE FROM hackathons WHERE id = ${id}`;
+}
+
 export async function upsertUser(env: unknown, phone: string) {
   await ensureDatabase(env);
   await getSql(env)`

@@ -1,9 +1,11 @@
 import {
   addEntry,
+  deleteHackathon,
   listEntries,
   listHackathons,
   removeEntry,
   updateEntry,
+  updateHackathon,
   upsertHackathon,
   upsertUser,
 } from "./db.server";
@@ -48,6 +50,20 @@ export async function handleApiRequest(request: Request, env: unknown) {
       const hackathon = parseHackathon(await readBody(request));
       await upsertHackathon(env, hackathon, { source: "community", userAdded: true });
       return json(hackathon, 201);
+    }
+
+    const hackathonMatch = url.pathname.match(/^\/api\/hackathons\/([^/]+)$/);
+    if (hackathonMatch && request.method === "PATCH") {
+      requirePhone(request);
+      const patch = parseHackathonPatch(await readBody(request));
+      await updateHackathon(env, decodeURIComponent(hackathonMatch[1]), patch);
+      return json({ ok: true });
+    }
+
+    if (hackathonMatch && request.method === "DELETE") {
+      requirePhone(request);
+      await deleteHackathon(env, decodeURIComponent(hackathonMatch[1]));
+      return json({ ok: true });
     }
 
     if (url.pathname === "/api/scrape" && request.method === "POST") {
@@ -128,6 +144,31 @@ function parseHackathon(body: Record<string, unknown>): Hackathon {
   }
 
   return hackathon;
+}
+
+function parseHackathonPatch(body: Record<string, unknown>): Partial<Hackathon> {
+  const patch: Partial<Hackathon> = {};
+  if ("name" in body) patch.name = requireText(body.name, "name");
+  if ("date" in body) patch.date = requireDate(body.date, "date");
+  if ("registrationDeadline" in body) {
+    const value = body.registrationDeadline;
+    patch.registrationDeadline = value ? requireDate(value, "registrationDeadline") : null;
+  }
+  if ("prize" in body) patch.prize = requireText(body.prize, "prize");
+  if ("venue" in body) patch.venue = requireText(body.venue, "venue");
+  if ("mode" in body) patch.mode = parseMode(body.mode);
+  if ("link" in body) patch.link = requireUrl(body.link);
+  if ("description" in body) patch.description = optionalText(body.description);
+
+  if (
+    patch.registrationDeadline &&
+    patch.date &&
+    new Date(`${patch.registrationDeadline}T00:00:00`) > new Date(`${patch.date}T00:00:00`)
+  ) {
+    throw new ApiError("Last registration date cannot be after the hackathon date.");
+  }
+
+  return patch;
 }
 
 function parseEntry(body: Record<string, unknown>): Entry {

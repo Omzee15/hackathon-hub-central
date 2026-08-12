@@ -233,7 +233,7 @@ function decodeEntities(value: string) {
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
-    .replace(/&#39;/g, "'")
+    .replace(/&#0*39;/g, "'")
     .replace(/&nbsp;/g, " ");
 }
 

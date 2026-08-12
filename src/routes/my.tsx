@@ -1,12 +1,25 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import {
+  HackathonForm,
+  emptyHackathonForm,
+  validateHackathonForm,
+  type HackathonFormValues,
+} from "@/components/HackathonForm";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { store } from "@/lib/store";
 import type { Entry, Hackathon } from "@/lib/types";
-import { CalendarDays, MapPin, Trophy, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, MapPin, Trophy, ExternalLink, Pencil, Trash2, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/my")({
-  head: () => ({ meta: [{ title: "My hackathons — hackhub" }] }),
+  head: () => ({ meta: [{ title: "Manage hackathons — hackhub" }] }),
   component: My,
 });
 
@@ -17,12 +30,36 @@ const STATUS_LABEL: Record<Entry["status"], string> = {
   dropped: "Dropped",
 };
 
+function toForm(h?: Hackathon, e?: Entry): HackathonFormValues {
+  return {
+    name: h?.name ?? "",
+    date: h?.date ?? "",
+    registrationDeadline: h?.registrationDeadline ?? "",
+    prize: h?.prize ?? "",
+    venue: h?.venue ?? "",
+    mode: h?.mode ?? "online",
+    link: h?.link ?? "",
+    description: h?.description ?? "",
+    idea: e?.idea ?? "",
+    status: e?.status ?? "registered",
+  };
+}
+
 function My() {
   const router = useRouter();
   const [user, setUser] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [all, setAll] = useState<Hackathon[]>([]);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState<HackathonFormValues>(emptyHackathonForm);
+  const [addErr, setAddErr] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const [editEntry, setEditEntry] = useState<Entry | null>(null);
+  const [editForm, setEditForm] = useState<HackathonFormValues>(emptyHackathonForm);
+  const [editErr, setEditErr] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -58,10 +95,85 @@ function My() {
 
   const map = new Map(all.map((h) => [h.id, h]));
 
-  const editIdea = async (e: Entry) => {
-    const idea = window.prompt("Update your idea:", e.idea);
-    if (idea === null) return;
-    await store.updateEntry(e.id, { idea: idea.trim() });
+  const openAdd = () => {
+    setAddForm(emptyHackathonForm);
+    setAddErr("");
+    setAddOpen(true);
+  };
+
+  const submitAdd = async () => {
+    const error = validateHackathonForm(addForm);
+    if (error) {
+      setAddErr(error);
+      return;
+    }
+    try {
+      setSaving(true);
+      const hackathon: Hackathon = {
+        id: crypto.randomUUID(),
+        platform: "Community",
+        userAdded: true,
+        name: addForm.name,
+        date: addForm.date,
+        registrationDeadline: addForm.registrationDeadline || null,
+        prize: addForm.prize,
+        venue: addForm.venue,
+        mode: addForm.mode,
+        link: addForm.link,
+        description: addForm.description || undefined,
+      };
+      await store.addCustom(hackathon);
+      await store.addEntry({
+        id: crypto.randomUUID(),
+        hackathonId: hackathon.id,
+        idea: addForm.idea.trim(),
+        status: addForm.status,
+        createdAt: new Date().toISOString(),
+      });
+      setAddOpen(false);
+    } catch (error) {
+      setAddErr(error instanceof Error ? error.message : "Could not add hackathon.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEdit = (e: Entry) => {
+    const h = map.get(e.hackathonId);
+    setEditEntry(e);
+    setEditForm(toForm(h, e));
+    setEditErr("");
+  };
+
+  const submitEdit = async () => {
+    if (!editEntry) return;
+    const error = validateHackathonForm(editForm);
+    if (error) {
+      setEditErr(error);
+      return;
+    }
+    try {
+      setSaving(true);
+      await store.updateHackathon(editEntry.hackathonId, {
+        name: editForm.name,
+        date: editForm.date,
+        registrationDeadline: editForm.registrationDeadline || null,
+        prize: editForm.prize,
+        venue: editForm.venue,
+        mode: editForm.mode,
+        link: editForm.link,
+        description: editForm.description || undefined,
+      });
+      await store.updateEntry(editEntry.id, {
+        idea: editForm.idea.trim(),
+        status: editForm.status,
+      });
+      setEditEntry(null);
+    } catch (error) {
+      setEditErr(error instanceof Error ? error.message : "Could not save changes.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cycleStatus = async (e: Entry) => {
@@ -70,8 +182,13 @@ function My() {
     await store.updateEntry(e.id, { status: next });
   };
 
-  const remove = async (id: string) => {
-    if (confirm("Remove this hackathon from your list?")) await store.removeEntry(id);
+  const remove = async (e: Entry) => {
+    if (!confirm("Remove this hackathon from your list?")) return;
+    await store.removeEntry(e.id);
+    const h = map.get(e.hackathonId);
+    if (h?.userAdded) {
+      await store.deleteHackathon(h.id).catch(() => {});
+    }
   };
 
   return (
@@ -79,31 +196,47 @@ function My() {
       <div className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="mb-2 font-display text-4xl">My hackathons</h1>
+            <h1 className="mb-2 font-display text-4xl">Manage hackathons</h1>
             <p className="text-muted-foreground">
               {entries.length} tracked · signed in as {user ?? "—"}
             </p>
           </div>
-          <Link
-            to="/"
-            className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-secondary"
-          >
-            Browse more
-          </Link>
+          <div className="flex gap-3">
+            <button
+              onClick={openAdd}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" /> Add manually
+            </button>
+            <Link
+              to="/"
+              className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-secondary"
+            >
+              Browse more
+            </Link>
+          </div>
         </div>
 
         {entries.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card/50 p-16 text-center">
             <h2 className="mb-2 font-display text-2xl">Nothing tracked yet.</h2>
             <p className="mb-6 text-muted-foreground">
-              Head to the browse page and hit "Track" on any hackathon.
+              Head to the browse page and hit "Track" on any hackathon, or add one manually.
             </p>
-            <Link
-              to="/"
-              className="inline-flex rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Browse hackathons
-            </Link>
+            <div className="flex justify-center gap-3">
+              <Link
+                to="/"
+                className="inline-flex rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Browse hackathons
+              </Link>
+              <button
+                onClick={openAdd}
+                className="inline-flex rounded-md border border-border bg-background px-5 py-2.5 text-sm hover:bg-secondary"
+              >
+                Add manually
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -143,7 +276,7 @@ function My() {
                         Your idea
                       </span>
                       <button
-                        onClick={() => editIdea(e)}
+                        onClick={() => openEdit(e)}
                         className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-secondary"
                       >
                         <Pencil className="h-3 w-3" /> edit
@@ -175,7 +308,7 @@ function My() {
                       Announcement <ExternalLink className="h-3 w-3" />
                     </a>
                     <button
-                      onClick={() => remove(e.id)}
+                      onClick={() => remove(e)}
                       className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
                     >
                       <Trash2 className="h-3 w-3" /> Remove
@@ -187,6 +320,60 @@ function My() {
           </div>
         )}
       </div>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add a hackathon manually</DialogTitle>
+          </DialogHeader>
+          <HackathonForm form={addForm} onChange={setAddForm} />
+          {addErr && <p className="text-sm text-destructive">{addErr}</p>}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setAddOpen(false)}
+              className="rounded-md border border-border bg-background px-5 py-2.5 text-sm hover:bg-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={submitAdd}
+              className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              {saving ? "Saving..." : "Add hackathon"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editEntry !== null} onOpenChange={(open) => !open && setEditEntry(null)}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit hackathon</DialogTitle>
+          </DialogHeader>
+          <HackathonForm form={editForm} onChange={setEditForm} />
+          {editErr && <p className="text-sm text-destructive">{editErr}</p>}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setEditEntry(null)}
+              className="rounded-md border border-border bg-background px-5 py-2.5 text-sm hover:bg-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={submitEdit}
+              className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              {saving ? "Saving..." : "Save changes"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="hidden items-center gap-1 md:flex">
             <NavLink to="/">Browse</NavLink>
             <NavLink to="/add">Submit hackathon</NavLink>
-            {phone && <NavLink to="/my">My hackathons</NavLink>}
+            {phone && <NavLink to="/my">Manage hackathons</NavLink>}
           </nav>
           <div className="flex items-center gap-2">
             {phone ? (
